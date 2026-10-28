@@ -15,7 +15,7 @@ npm install
 
 # 3. Configure environment (optional — works in demo mode without it)
 cp .env.example .env
-# Edit .env with your Supabase and Groq credentials
+# Edit .env with your Groq credentials (optional)
 
 # 4. Start both frontend and backend
 npm run dev
@@ -31,7 +31,7 @@ Open `http://localhost:5173` in your browser.
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌──────────────────┐
-│   React Frontend │────▶│  Express Backend  │────▶│  Supabase (Pg)  │
+│   React Frontend │────▶│  Express Backend  │────▶│  Cloud Firestore│
 │   (Vite + TW)   │     │   Port 3001       │────▶│   Groq AI API   │
 └─────────────────┘     └──────────────────┘     └──────────────────┘
 ```
@@ -40,17 +40,24 @@ Open `http://localhost:5173` in your browser.
 
 | Variable | Required | Description |
 |---|---|---|
-| `SUPABASE_URL` | No* | Supabase project URL |
-| `SUPABASE_ANON_KEY` | No* | Supabase anon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | No* | Supabase service role key (for server) |
 | `GROQ_API_KEY` | No* | Groq API key for AI analysis |
+| `FIREBASE_PROJECT_ID` | For Firestore | Firebase project ID |
+| `GOOGLE_APPLICATION_CREDENTIALS` | For Firestore | Path to the Firebase service-account JSON file |
 | `PORT` | No | Server port (default: 3001) |
 
-*Without these, the app runs in **demo mode** (in-memory storage, rule-based classification).
+Without Firebase credentials, complaints use **demo mode** (in-memory storage) and reset when the server restarts.
 
 ## 🗄️ Database Setup
 
-Run `supabase-schema.sql` in your Supabase SQL Editor to create the complaints table.
+The backend uses Firebase Admin SDK to store complaints in Cloud Firestore:
+
+1. In Firebase Console, create a **Cloud Firestore** database for your project.
+2. In **Project settings → Service accounts**, generate a private key. Keep this key private; never commit it or put it in frontend code.
+3. For local development, save the JSON key as `.secrets/firebase-service-account.json` and set `FIREBASE_PROJECT_ID` and `GOOGLE_APPLICATION_CREDENTIALS` in `.env`. Use your Firebase project ID for the former and `.secrets/firebase-service-account.json` for the latter.
+4. For Render, add the JSON key as a Secret File named `firebase-service-account.json`, then set `FIREBASE_PROJECT_ID` and `GOOGLE_APPLICATION_CREDENTIALS=/etc/secrets/firebase-service-account.json` on the backend service.
+5. Restart/redeploy the backend and check `GET /api/health`. Firestore is reachable when `services.firestore.connected` is `true`.
+
+The app creates the `complaints` collection when the first complaint is submitted. The browser does not connect directly to Firestore; database access stays on the backend.
 
 ## ✨ Features
 

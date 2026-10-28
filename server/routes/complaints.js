@@ -1,11 +1,11 @@
 import express from 'express';
-import { supabase, isConfigured } from '../lib/supabase.js';
 import { detectRecurringIssues } from '../lib/similarity.js';
+import { firestore, isConfigured } from '../lib/firestore.js';
 
 const router = express.Router();
 
 // In-memory store for demo mode
-const demoStore = {
+export const demoStore = {
   complaints: [],
   nextId: 1,
 };
@@ -19,7 +19,7 @@ router.get('/', async (req, res) => {
   try {
     const { status, category, urgency, search, limit = 100, offset = 0 } = req.query;
 
-    if (!isConfigured || !supabase) {
+    if (!isConfigured || !firestore) {
       // Demo mode — return from memory
       let results = [...demoStore.complaints].reverse();
 
@@ -42,23 +42,25 @@ router.get('/', async (req, res) => {
       });
     }
 
-    let query = supabase
-      .from('complaints')
-      .select('*', { count: 'exact' })
-      .order('created_at', { ascending: false })
-      .range(Number(offset), Number(offset) + Number(limit) - 1);
+    const snapshot = await firestore.collection('complaints').orderBy('created_at', 'desc').get();
+    let results = snapshot.docs.map((doc) => doc.data());
 
-    if (status) query = query.eq('status', status);
-    if (category) query = query.eq('category', category);
-    if (urgency) query = query.eq('urgency', urgency);
+    if (status) results = results.filter((complaint) => complaint.status === status);
+    if (category) results = results.filter((complaint) => complaint.category === category);
+    if (urgency) results = results.filter((complaint) => complaint.urgency === urgency);
     if (search) {
-      query = query.or(`description.ilike.%${search}%,location.ilike.%${search}%,ai_title.ilike.%${search}%`);
+      const term = String(search).toLowerCase();
+      results = results.filter((complaint) =>
+        [complaint.description, complaint.location, complaint.ai_title]
+          .some((value) => (value || '').toLowerCase().includes(term))
+      );
     }
 
-    const { data, error, count } = await query;
-    if (error) throw error;
-
-    res.json({ data: data || [], total: count || 0, mode: 'live' });
+    res.json({
+      data: results.slice(Number(offset), Number(offset) + Number(limit)),
+      total: results.length,
+      mode: 'live',
+    });
   } catch (err) {
     console.error('[GET /complaints]', err.message);
     res.status(500).json({ error: 'Failed to fetch complaints' });
@@ -68,7 +70,7 @@ router.get('/', async (req, res) => {
 // GET /api/complaints/stats — dashboard statistics
 router.get('/stats', async (req, res) => {
   try {
-    if (!isConfigured || !supabase) {
+    if (!isConfigured || !firestore) {
       const all = demoStore.complaints;
       return res.json({
         total: all.length,
@@ -81,13 +83,8 @@ router.get('/stats', async (req, res) => {
       });
     }
 
-    const { data, error } = await supabase
-      .from('complaints')
-      .select('status, urgency, recurring_match_ids');
-
-    if (error) throw error;
-
-    const all = data || [];
+    const snapshot = await firestore.collection('complaints').get();
+    const all = snapshot.docs.map((doc) => doc.data());
     res.json({
       total: all.length,
       open: all.filter(c => c.status === 'Open').length,
@@ -108,22 +105,15 @@ router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!isConfigured || !supabase) {
+    if (!isConfigured || !firestore) {
       const complaint = demoStore.complaints.find(c => c.id === id);
       if (!complaint) return res.status(404).json({ error: 'Complaint not found' });
       return res.json({ data: complaint, mode: 'demo' });
     }
 
-    const { data, error } = await supabase
-      .from('complaints')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (error) throw error;
-    if (!data) return res.status(404).json({ error: 'Complaint not found' });
-
-    res.json({ data, mode: 'live' });
+    const snapshot = await firestore.collection('complaints').doc(id).get();
+    if (!snapshot.exists) return res.status(404).json({ error: 'Complaint not found' });
+    res.json({ data: snapshot.data(), mode: 'live' });
   } catch (err) {
     console.error('[GET /complaints/:id]', err.message);
     res.status(500).json({ error: 'Failed to fetch complaint' });
@@ -178,7 +168,7 @@ router.post('/', async (req, res) => {
       recurring_reason: recurring_reason || null,
     };
 
-    if (!isConfigured || !supabase) {
+    if (!isConfigured || !firestore) {
       // Demo mode
       const newComplaint = {
         ...complaint,
@@ -196,13 +186,9 @@ router.post('/', async (req, res) => {
       });
     }
 
-    const { data, error } = await supabase
-      .from('complaints')
-      .insert([complaint])
-      .select()
-      .single();
-
-    if (error) throw error;
+    const document = firestore.collection('complaints').doc();
+    const data = { ...complaint, id: document.id };
+    await document.set(data);
 
     res.status(201).json({
       data,
@@ -236,23 +222,18 @@ router.patch('/:id', async (req, res) => {
       ...(status === 'Resolved' && { resolved_at: new Date().toISOString() }),
     };
 
-    if (!isConfigured || !supabase) {
+    if (!isConfigured || !firestore) {
       const idx = demoStore.complaints.findIndex(c => c.id === id);
       if (idx === -1) return res.status(404).json({ error: 'Complaint not found' });
       demoStore.complaints[idx] = { ...demoStore.complaints[idx], ...updates };
       return res.json({ data: demoStore.complaints[idx], mode: 'demo' });
     }
 
-    const { data, error } = await supabase
-      .from('complaints')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    res.json({ data, mode: 'live' });
+    const document = firestore.collection('complaints').doc(id);
+    const snapshot = await document.get();
+    if (!snapshot.exists) return res.status(404).json({ error: 'Complaint not found' });
+    await document.update(updates);
+    res.json({ data: { ...snapshot.data(), ...updates }, mode: 'live' });
   } catch (err) {
     console.error('[PATCH /complaints/:id]', err.message);
     res.status(500).json({ error: 'Failed to update complaint' });
@@ -266,12 +247,11 @@ router.post('/:id/detect-recurring', async (req, res) => {
 
     // Get the complaint
     let complaint;
-    if (!isConfigured || !supabase) {
+    if (!isConfigured || !firestore) {
       complaint = demoStore.complaints.find(c => c.id === id);
     } else {
-      const { data, error } = await supabase.from('complaints').select('*').eq('id', id).single();
-      if (error) throw error;
-      complaint = data;
+      const snapshot = await firestore.collection('complaints').doc(id).get();
+      complaint = snapshot.exists ? snapshot.data() : null;
     }
 
     if (!complaint) return res.status(404).json({ error: 'Complaint not found' });
@@ -280,18 +260,19 @@ router.post('/:id/detect-recurring', async (req, res) => {
     const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
     let historical = [];
 
-    if (!isConfigured || !supabase) {
+    if (!isConfigured || !firestore) {
       historical = demoStore.complaints.filter(c =>
         c.id !== id && c.created_at >= ninetyDaysAgo
       );
     } else {
-      const { data } = await supabase
-        .from('complaints')
-        .select('*')
-        .neq('id', id)
-        .gte('created_at', ninetyDaysAgo)
-        .limit(200);
-      historical = data || [];
+      const snapshot = await firestore.collection('complaints')
+        .where('created_at', '>=', ninetyDaysAgo)
+        .orderBy('created_at', 'desc')
+        .limit(200)
+        .get();
+      historical = snapshot.docs
+        .map((doc) => doc.data())
+        .filter((item) => item.id !== id);
     }
 
     const matches = detectRecurringIssues(complaint, historical);
@@ -308,20 +289,20 @@ router.post('/seed-demo', async (req, res) => {
   try {
     const demoComplaints = generateDemoData();
 
-    if (!isConfigured || !supabase) {
+    if (!isConfigured || !firestore) {
       demoStore.complaints = demoComplaints;
       return res.json({ message: `Seeded ${demoComplaints.length} demo complaints`, mode: 'demo' });
     }
 
-    // Insert into Supabase
-    const { data, error } = await supabase
-      .from('complaints')
-      .insert(demoComplaints.map(c => ({ ...c, id: undefined, is_demo: true })))
-      .select();
+    const collection = firestore.collection('complaints');
+    const batch = firestore.batch();
+    demoComplaints.forEach((complaint) => {
+      const document = collection.doc();
+      batch.set(document, { ...complaint, id: document.id, is_demo: true });
+    });
+    await batch.commit();
 
-    if (error) throw error;
-
-    res.json({ message: `Seeded ${data.length} demo complaints`, mode: 'live' });
+    res.json({ message: `Seeded ${demoComplaints.length} demo complaints`, mode: 'live' });
   } catch (err) {
     console.error('[POST /seed-demo]', err.message);
     res.status(500).json({ error: 'Failed to seed demo data' });

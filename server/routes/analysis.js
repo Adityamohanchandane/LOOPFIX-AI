@@ -1,7 +1,8 @@
 import express from 'express';
 import { analyzeComplaint, isConfigured as groqConfigured } from '../lib/groq.js';
 import { ruleBasedClassify, detectRecurringIssues } from '../lib/similarity.js';
-import { supabase, isConfigured as supabaseConfigured } from '../lib/supabase.js';
+import { firestore, isConfigured as firestoreConfigured } from '../lib/firestore.js';
+import { demoStore } from './complaints.js';
 
 const router = express.Router();
 
@@ -41,20 +42,19 @@ router.post('/analyze', async (req, res) => {
     const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
     let historical = [];
 
-    if (supabaseConfigured && supabase) {
+    if (firestoreConfigured && firestore) {
       try {
-        const { data } = await supabase
-          .from('complaints')
-          .select('id, description, normalized_description, category, location, building, status, urgency, ai_title, created_at, resolved_at, recurring_match_ids')
-          .gte('created_at', ninetyDaysAgo)
-          .limit(200);
-        historical = data || [];
+        const snapshot = await firestore.collection('complaints')
+          .where('created_at', '>=', ninetyDaysAgo)
+          .orderBy('created_at', 'desc')
+          .limit(200)
+          .get();
+        historical = snapshot.docs.map((doc) => doc.data());
       } catch (dbErr) {
         console.warn('[Analysis] Could not fetch historical complaints:', dbErr.message);
       }
     } else {
-      // Use demo store if available (imported from complaints router)
-      // Historical matching will be limited to what's in memory
+      historical = demoStore.complaints.filter(c => c.created_at >= ninetyDaysAgo);
     }
 
     // Detect recurring issues
@@ -92,9 +92,9 @@ router.get('/status', (req, res) => {
       fallback: 'Rule-based classification',
     },
     database: {
-      configured: supabaseConfigured,
-      provider: supabaseConfigured ? 'Supabase PostgreSQL' : null,
-      mode: supabaseConfigured ? 'live' : 'demo',
+      configured: firestoreConfigured,
+      provider: firestoreConfigured ? 'Firebase Cloud Firestore' : null,
+      mode: firestoreConfigured ? 'live' : 'demo',
     },
   });
 });

@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { firestore, isConfigured as firestoreConfigured } from './lib/firestore.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -18,12 +19,26 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Health check
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
+  let firestoreConnected = false;
+
+  if (firestoreConfigured && firestore) {
+    try {
+      await firestore.collection('complaints').limit(1).get();
+      firestoreConnected = true;
+    } catch (err) {
+      console.error('[Health] Firestore check failed:', err.message);
+    }
+  }
+
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     services: {
-      supabase: !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
+      firestore: {
+        configured: firestoreConfigured,
+        connected: firestoreConnected,
+      },
       groq: !!process.env.GROQ_API_KEY,
     }
   });
@@ -56,7 +71,7 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`\n🔧 LoopFix AI Server running on http://localhost:${PORT}`);
-  console.log(`   Supabase: ${process.env.SUPABASE_URL ? '✅ configured' : '⚠️  not configured (demo mode)'}`);
+  console.log(`   Firestore: ${firestoreConfigured ? '✅ configured' : '⚠️  not configured (demo mode)'}`);
   console.log(`   Groq AI:  ${process.env.GROQ_API_KEY ? '✅ configured' : '⚠️  not configured (fallback mode)'}\n`);
 });
 
