@@ -123,6 +123,18 @@
     @apply form-input appearance-none cursor-pointer;
   }
 
+  /* Native dropdown lists use a light OS background; keep option text readable */
+  .form-select option {
+    color: #0f172a;
+    background-color: #ffffff;
+  }
+
+  .form-select option:checked,
+  .form-select option:hover {
+    color: #0f172a;
+    background-color: #e2e8f0;
+  }
+
   .form-label {
     @apply block text-sm font-medium text-gray-300 mb-1.5;
   }
