@@ -15,7 +15,7 @@ npm install
 
 # 3. Configure environment (optional — works in demo mode without it)
 cp .env.example .env
-# Edit .env with your Groq credentials (optional)
+# Edit .env with your AI provider credentials (optional)
 
 # 4. Start both frontend and backend
 npm run dev
@@ -32,7 +32,7 @@ Open `http://localhost:5173` in your browser.
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌──────────────────┐
 │   React Frontend │────▶│  Express Backend  │────▶│  Cloud Firestore│
-│   (Vite + TW)   │     │   Port 3001       │────▶│   Groq AI API   │
+│   (Vite + TW)   │     │   Port 3001       │────▶│ Groq → Gemini  │
 └─────────────────┘     └──────────────────┘     └──────────────────┘
 ```
 
@@ -40,10 +40,13 @@ Open `http://localhost:5173` in your browser.
 
 | Variable | Required | Description |
 |---|---|---|
-| `GROQ_API_KEY` | No* | Groq API key for AI analysis |
+| `GROQ_API_KEY` | No* | Primary Groq API key for AI analysis |
+| `GEMINI_API_KEY` | No* | Google Gemini backup key; tried if Groq is unavailable or fails |
 | `FIREBASE_PROJECT_ID` | For Firestore | Firebase project ID |
 | `GOOGLE_APPLICATION_CREDENTIALS` | For Firestore | Path to the Firebase service-account JSON file |
 | `PORT` | No | Server port (default: 3001) |
+
+Configure either AI provider, or both for automatic backup. If neither is configured or both fail, the app uses rule-based classification.
 
 Without Firebase credentials, complaints use **demo mode** (in-memory storage) and reset when the server restarts.
 
@@ -62,7 +65,7 @@ The app creates the `complaints` collection when the first complaint is submitte
 ## ✨ Features
 
 - **Student Complaint Form** — submit issues with location, category, and description
-- **AI Analysis (Groq)** — automatic normalization, categorization, urgency assessment
+- **AI Analysis (Groq with Gemini backup)** — automatic normalization, categorization, urgency assessment
 - **Rule-based Fallback** — works even when AI is unavailable (clearly labeled)
 - **Recurring Issue Detection** — matches new complaints against 90-day history using text similarity + location matching
 - **Admin Dashboard** — full complaint management with filters, search, status updates

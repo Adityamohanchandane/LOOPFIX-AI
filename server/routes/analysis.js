@@ -1,6 +1,11 @@
 import express from 'express';
-import { analyzeComplaint, isConfigured as groqConfigured } from '../lib/groq.js';
-import { ruleBasedClassify, detectRecurringIssues } from '../lib/similarity.js';
+import {
+  analyzeComplaint,
+  aiConfigured,
+  isConfigured as groqConfigured,
+  isGeminiConfigured,
+} from '../lib/groq.js';
+import { detectRecurringIssues } from '../lib/similarity.js';
 import { firestore, isConfigured as firestoreConfigured } from '../lib/firestore.js';
 import { demoStore } from './complaints.js';
 
@@ -17,26 +22,10 @@ router.post('/analyze', async (req, res) => {
 
     const effectiveLocation = location || [building, floor].filter(Boolean).join(', ') || '';
 
-    let result;
-    let analysisSource;
-
-    if (groqConfigured) {
-      const aiResult = await analyzeComplaint(description.trim(), effectiveLocation);
-
-      if (aiResult.success) {
-        result = aiResult.data;
-        analysisSource = 'ai';
-      } else {
-        // AI failed — use rule-based fallback
-        result = ruleBasedClassify(description.trim(), effectiveLocation);
-        analysisSource = 'fallback';
-        console.warn('[Analysis] AI failed, using fallback:', aiResult.error);
-      }
-    } else {
-      // No AI configured — use rule-based fallback
-      result = ruleBasedClassify(description.trim(), effectiveLocation);
-      analysisSource = 'fallback';
-    }
+    const aiResult = await analyzeComplaint(description.trim(), effectiveLocation);
+    const result = aiResult.data;
+    const analysisSource = aiResult.usedFallback ? 'fallback' : 'ai';
+    const analysisProvider = aiResult.provider || null;
 
     // Get historical complaints for recurring detection
     const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
@@ -70,6 +59,7 @@ router.post('/analyze', async (req, res) => {
     res.json({
       analysis: result,
       analysisSource, // 'ai' | 'fallback'
+      analysisProvider,
       recurring: {
         matches: recurringMatches,
         count: recurringMatches.length,
@@ -87,8 +77,13 @@ router.post('/analyze', async (req, res) => {
 router.get('/status', (req, res) => {
   res.json({
     ai: {
-      configured: groqConfigured,
-      provider: groqConfigured ? 'Groq (openai/gpt-oss-20b)' : null,
+      configured: aiConfigured,
+      provider: groqConfigured
+        ? 'Groq (openai/gpt-oss-20b)'
+        : isGeminiConfigured ? 'Google Gemini (gemini-2.5-flash)' : null,
+      backupProvider: groqConfigured && isGeminiConfigured
+        ? 'Google Gemini (gemini-2.5-flash)'
+        : 'Rule-based classification',
       fallback: 'Rule-based classification',
     },
     database: {

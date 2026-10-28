@@ -75,7 +75,7 @@ export default function Footer() {
           </p>
           <p className="text-gray-600 text-xs">
             Powered by{' '}
-            <span className="text-gray-500">Groq AI · React</span>
+            <span className="text-gray-500">Groq · Gemini · React</span>
           </p>
         </div>
       </div>

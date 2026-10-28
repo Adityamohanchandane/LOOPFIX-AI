@@ -40,6 +40,7 @@ app.get('/api/health', async (req, res) => {
         connected: firestoreConnected,
       },
       groq: !!process.env.GROQ_API_KEY,
+      gemini: !!process.env.GEMINI_API_KEY,
     }
   });
 });
@@ -72,7 +73,10 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`\n🔧 LoopFix AI Server running on http://localhost:${PORT}`);
   console.log(`   Firestore: ${firestoreConfigured ? '✅ configured' : '⚠️  not configured (demo mode)'}`);
-  console.log(`   Groq AI:  ${process.env.GROQ_API_KEY ? '✅ configured' : '⚠️  not configured (fallback mode)'}\n`);
+  console.log(`   Groq AI:  ${process.env.GROQ_API_KEY ? '✅ configured' : '⚠️  not configured'}`);
+  console.log(`   Gemini AI: ${process.env.GEMINI_API_KEY
+    ? process.env.GROQ_API_KEY ? '✅ configured as backup' : '✅ configured as primary provider'
+    : '⚠️  not configured'}\n`);
 });
 
 export default app;

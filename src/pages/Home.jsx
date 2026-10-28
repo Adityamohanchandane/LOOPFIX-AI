@@ -12,7 +12,7 @@ const FEATURES = [
   {
     icon: Zap,
     title: 'AI-Powered Analysis',
-    desc: 'Groq-powered large language model extracts structured data — category, urgency, department, and recommended action.',
+    desc: 'AI extracts structured data — category, urgency, department, and recommended action, with a backup provider if the primary is unavailable.',
     color: 'cyan',
   },
   {
@@ -45,7 +45,7 @@ const COLOR_MAP = {
 
 const HOW_IT_WORKS = [
   { step: '01', title: 'Student Reports Issue', desc: 'Fill out the complaint form with location and description.' },
-  { step: '02', title: 'AI Analyzes Complaint', desc: 'Groq AI normalizes, categorizes, and assesses urgency instantly.' },
+  { step: '02', title: 'AI Analyzes Complaint', desc: 'AI normalizes, categorizes, and assesses urgency, with an automatic backup provider.' },
   { step: '03', title: 'History Search', desc: 'System scans last 90 days of complaints for similar patterns.' },
   { step: '04', title: 'Match Found', desc: 'Recurring or duplicate issues are flagged with historical context.' },
   { step: '05', title: 'Admin Takes Action', desc: 'Dashboard highlights patterns for prioritized response.' },
