@@ -147,7 +147,7 @@ export default function SubmitComplaint() {
       const result = await complaintsApi.submit(payload);
 
       if (result.mode === 'demo') {
-        toast.info('Complaint saved in demo mode. Configure Supabase for persistent storage.');
+        toast.info('Complaint saved in demo mode. It will be cleared when the server restarts.');
       } else {
         toast.success('Complaint submitted successfully!');
       }

@@ -88,7 +88,7 @@ router.get('/status', (req, res) => {
   res.json({
     ai: {
       configured: groqConfigured,
-      provider: groqConfigured ? 'Groq (llama-3.1-8b-instant)' : null,
+      provider: groqConfigured ? 'Groq (openai/gpt-oss-20b)' : null,
       fallback: 'Rule-based classification',
     },
     database: {

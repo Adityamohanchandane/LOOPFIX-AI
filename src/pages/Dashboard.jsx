@@ -149,7 +149,7 @@ export default function Dashboard() {
             <p className="text-gray-500 text-sm">
               {mode === 'demo'
                 ? 'Running in demo mode — data is not persisted to a database'
-                : 'Live data from Supabase PostgreSQL'}
+                : 'Live data from Firebase Cloud Firestore'}
             </p>
           </div>
 
